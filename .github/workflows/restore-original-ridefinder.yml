@@ -1,0 +1,60 @@
+name: Restore original RideFinder website
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/restore-original-ridefinder.yml
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Retrieve original Volt Studios Bike Finder
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE="https://ridefinder-electric.brandon624.chatgpt.site"
+          mkdir -p assets
+          curl --fail --location --show-error --silent --retry 3 "$BASE/" -o index.html
+          curl --fail --location --show-error --silent --retry 3 "$BASE/style.css" -o style.css
+          curl --fail --location --show-error --silent --retry 3 "$BASE/app.js" -o app.js
+          curl --fail --location --show-error --silent --retry 3 "$BASE/assets/volt-studios.png" -o assets/volt-studios.png
+          curl --fail --location --show-error --silent --retry 3 "$BASE/assets/talaria-hero.png" -o assets/talaria-hero.png
+          python3 - <<'PY'
+          from pathlib import Path
+          assert 'Bike Finder' in Path('index.html').read_text()
+          assert 'style.css' in Path('index.html').read_text()
+          assert 'app.js' in Path('index.html').read_text()
+          assert 'const bikes=' in Path('app.js').read_text()
+          for asset in ('volt-studios.png','talaria-hero.png'):
+              assert Path('assets',asset).read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
+          PY
+          rm -rf js styles.css assets/favicon.svg assets/volt-studios-logo.png import-payload
+          rm -f .github/workflows/import-ridefinder.yml
+          cat > README.md <<'EOF'
+          # Bike Finder — Volt Studios
+
+          Source files recovered from the original published website at:
+          https://ridefinder-electric.brandon624.chatgpt.site/
+
+          This repository contains the original live HTML, CSS, JavaScript, Volt Studios logo and Talaria hero image, copied from the published site. It is **not** the alternate RideFinder recreation previously uploaded.
+
+          ## GitHub Pages
+          Go to Settings → Pages → Deploy from a branch → main / (root).
+
+          The price/spec listings and dealer information are part of the source site; verify details with retailers before buying.
+          EOF
+
+      - name: Commit original website files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "Replace recreation with original published Volt Studios Bike Finder"
+          git push
